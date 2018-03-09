@@ -55,7 +55,6 @@ def create_bridge():
     bridge.create()
 
 def create_vlan():
-    # We need to list the interfaces from the sysfs.
     choices = [(str(i), '') for i in ipdb.by_name.keys()]
 
     code, master = d.menu('Select the master interface to use.', choices=choices)
