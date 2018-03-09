@@ -3,9 +3,12 @@
 import dialog
 
 import os
+from pyroute2 import IPRoute, IPDB
 import subprocess
 
 d = dialog.Dialog()
+
+ipdb = IPDB()
 
 class Bridge():
     def __init__(self, name, interfaces=[]):
@@ -13,39 +16,29 @@ class Bridge():
         self.interfaces = interfaces
 
     def create(self):
-        cmd = [
-                '/sbin/ip', 'link',
-                'add', 'name', self.name,
-                'type', 'bridge',
-                ]
-        subprocess.run(cmd)
-        for interface in self.interfaces:
-            cmd = [
-                    '/sbin/ip', 'link',
-                    'set', 'dev', interface,
-                    'master', self.name
-                    ]
-            subprocess.run(cmd)
+        global ipdb
+        with ipdb.create(kind='bridge', ifname=self.name) as master:
+            for slave in self.interfaces:
+                master.add_port(ipdb.interfaces[slave])
 
 class VLAN():
     def __init__(self, name, master, vid):
         self.name = name
         self.master = master
-        self.vid = vid
+        self.vid = int(vid)
 
     def create(self):
-        cmd = [
-                '/sbin/ip', 'link',
-                'add', 'link', self.master,
-                'name', self.name,
-                'type', 'vlan',
-                'id', self.vid,
-                ]
-        subprocess.run(cmd)
+        global ipdb
+        underlying = ipdb.interfaces[self.master]
+        ipdb.create(
+            kind='vlan',
+            ifname=self.name,
+            link=underlying,
+            vlan_id=self.vid
+        ).commit()
 
 def create_bridge():
-    # We need to list the interfaces from the sysfs.
-    choices = [(i, '', False) for i in os.listdir('/sys/class/net')]
+    choices = [(str(i), '', False) for i in ipdb.by_name.keys()]
 
     code, interfaces = d.checklist('Select the interfaces to add to the bridge.', choices=choices)
 
@@ -63,7 +56,7 @@ def create_bridge():
 
 def create_vlan():
     # We need to list the interfaces from the sysfs.
-    choices = [(i, '') for i in os.listdir('/sys/class/net')]
+    choices = [(str(i), '') for i in ipdb.by_name.keys()]
 
     code, master = d.menu('Select the master interface to use.', choices=choices)
 
