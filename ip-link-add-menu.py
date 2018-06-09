@@ -37,6 +37,22 @@ class VLAN():
             vlan_id=self.vid
         ).commit()
 
+class MACVLAN():
+    def __init__(self, name, master, mode):
+        self.name = name
+        self.master = master
+        self.mode = mode
+
+    def create(self):
+        global ipdb
+        underlying = ipdb.interfaces[self.master]
+        ipdb.create(
+            kind='macvlan',
+            ifname=self.name,
+            link=underlying,
+            mode=self.mode
+        ).commit()
+
 def create_bridge():
     choices = [(str(i), '', False) for i in ipdb.by_name.keys()]
 
@@ -78,12 +94,40 @@ def create_vlan():
 
     vlan.create()
 
+def create_macvlan():
+    choices = [(str(i), '') for i in ipdb.by_name.keys()]
+
+    code, master = d.menu('Select the master interface to use.', choices=choices)
+
+    if code == d.ESC or code == d.CANCEL:
+        return
+
+    code, name = d.inputbox('Please name your new MACVLAN interface.')
+
+    if code == d.ESC or code == d.CANCEL:
+        return
+
+    choices = [
+            ('private', 'Private'),
+            ('vepa', 'VEPA'),
+            ('bridge', 'Bridge'),
+            ('passthru', 'Passthrough'),
+            ('source', 'Source'),
+            ]
+
+    code, mode = d.menu('Select the mode of MACVLAN interface.', choices=choices)
+
+    macvlan = MACVLAN(name, master, mode)
+
+    macvlan.create()
+
 def main():
     d.set_background_title('ip-link add menu')
 
     choices = (
             ('bridge', 'Create a Bridge'),
             ('vlan', 'Create a VLAN'),
+            ('macvlan', 'Create a MACVLAN'),
             )
 
     code, tag = d.menu('Select the type of interface you want to create.', choices=choices)
@@ -95,6 +139,8 @@ def main():
         create_bridge()
     elif tag == 'vlan':
         create_vlan()
+    elif tag == 'macvlan':
+        create_macvlan()
 
 if __name__ == '__main__':
     main()
